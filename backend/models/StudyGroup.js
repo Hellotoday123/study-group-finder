@@ -10,7 +10,10 @@ const studyGroupSchema = new mongoose.Schema({
     required: true
   },
   description: String,
-  meetingTime: String,
+  meetingTime: {
+  type: Date,
+  required: true
+},
   location: String,
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,

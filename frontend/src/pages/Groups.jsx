@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import API from "../services/api";
 import { io } from "socket.io-client";
 
-const socket = io("http://localhost:4080");
+const socket = io("https://study-group-finder-backend-vhao.onrender.com");
 
 function Groups() {
   const [groups, setGroups] = useState([]);
@@ -11,8 +11,7 @@ function Groups() {
     title: "",
     subject: "",
     description: "",
-    meetingTime: "",
-    location: ""
+    meetingTime: ""
   });
 
   const loadGroups = async () => {
@@ -24,11 +23,11 @@ function Groups() {
     loadGroups();
 
     socket.on("group-created", (newGroup) => {
-      setGroups((oldGroups) => [...oldGroups, newGroup]);
+      setGroups((old) => [...old, newGroup]);
     });
 
     socket.on("group-deleted", (id) => {
-      setGroups((oldGroups) => oldGroups.filter((group) => group._id !== id));
+      setGroups((old) => old.filter((g) => g._id !== id));
     });
 
     return () => {
@@ -37,17 +36,19 @@ function Groups() {
     };
   }, []);
 
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
   const createGroup = async (e) => {
     e.preventDefault();
-
     await API.post("/groups", form);
 
     setForm({
       title: "",
       subject: "",
       description: "",
-      meetingTime: "",
-      location: ""
+      meetingTime: ""
     });
   };
 
@@ -62,33 +63,31 @@ function Groups() {
 
         <form onSubmit={createGroup}>
           <input
+            name="title"
             placeholder="Title"
             value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            onChange={handleChange}
           />
 
           <input
+            name="subject"
             placeholder="Subject"
             value={form.subject}
-            onChange={(e) => setForm({ ...form, subject: e.target.value })}
+            onChange={handleChange}
           />
 
           <input
+            name="description"
             placeholder="Description"
             value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            onChange={handleChange}
           />
 
           <input
-            placeholder="Meeting Time"
+            type="datetime-local"
+            name="meetingTime"
             value={form.meetingTime}
-            onChange={(e) => setForm({ ...form, meetingTime: e.target.value })}
-          />
-
-          <input
-            placeholder="Location"
-            value={form.location}
-            onChange={(e) => setForm({ ...form, location: e.target.value })}
+            onChange={handleChange}
           />
 
           <button>Add Group</button>
@@ -106,13 +105,7 @@ function Groups() {
 
             <p>{group.description}</p>
 
-            <p>
-              <strong>Time:</strong> {group.meetingTime}
-            </p>
-
-            <p>
-              <strong>Location:</strong> {group.location}
-            </p>
+            <p>{new Date(group.meetingTime).toLocaleString()}</p>
 
             <button
               className="delete-btn"
@@ -126,5 +119,16 @@ function Groups() {
     </div>
   );
 }
+
+const [message, setMessage] = useState("");
+const [messages, setMessages] = useState([]);
+
+useEffect(() => {
+  socket.on("new-message", (msg) => {
+    setMessages((prev) => [...prev, msg]);
+  });
+
+  return () => socket.off("new-message");
+}, []);
 
 export default Groups;

@@ -187,3 +187,11 @@ a {
 .eye-visible {
   opacity: 0.75;
 }
+
+nav button {
+  background: #dc2626;
+}
+
+nav button:hover {
+  background: #b91c1c;
+}

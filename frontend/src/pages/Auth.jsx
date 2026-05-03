@@ -1,175 +1,107 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../services/api";
 
 function Auth() {
-  const navigate = useNavigate();
-
   const [isLogin, setIsLogin] = useState(true);
-
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [error, setError] = useState("");
 
   const [form, setForm] = useState({
     name: "",
     email: "",
-    password: "",
-    confirmPassword: ""
+    password: ""
   });
 
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("");
+  const navigate = useNavigate();
 
-  // 👁️ ICONS
-  const Eye = () => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2">
-      <path d="M1 12C3 7 7 5 12 5s9 2 11 7c-2 5-6 7-11 7s-9-2-11-7z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
+  // 🔥 Auto redirect if already logged in
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      navigate("/home");
+    }
+  }, []);
 
-  const EyeOff = () => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2">
-      <path d="M1 1l22 22" />
-      <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19C7 19 2.73 15.11 1 12c.73-1.34 1.67-2.6 2.8-3.72" />
-      <path d="M9.9 4.24A10.94 10.94 0 0 1 12 5c5 0 9.27 3.89 11 7" />
-    </svg>
-  );
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
 
-  // 🚀 SUBMIT
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    setMessage("");
+    setError("");
 
     try {
-      if (!isLogin && form.password !== form.confirmPassword) {
-        setMessage("Passwords do not match");
-        setMessageType("error");
-        return;
-      }
-
       if (isLogin) {
+        // LOGIN
         const res = await API.post("/auth/login", {
           email: form.email,
           password: form.password
         });
 
         localStorage.setItem("token", res.data.token);
-        navigate("/groups");
-      } else {
-        await API.post("/auth/signup", {
-          name: form.name,
-          email: form.email,
-          password: form.password
-        });
 
-        setMessage("Account created. Login now.");
-        setMessageType("success");
+        // ✅ Redirect after login
+        navigate("/home");
+
+      } else {
+        // REGISTER
+        await API.post("/auth/signup", form);
+
+        // Switch to login after register
         setIsLogin(true);
       }
 
-      setForm({
-        name: "",
-        email: "",
-        password: "",
-        confirmPassword: ""
-      });
-
     } catch (err) {
-      console.log("ERROR:", err.response?.data || err.message);
-
-      setMessage(err.response?.data?.message || "Backend not responding");
-      setMessageType("error");
+      setError("Something went wrong");
     }
   };
 
   return (
-    <div className="auth-wrapper">
-      <div className="card auth-card">
+    <div className="card" style={{ maxWidth: "400px", margin: "100px auto" }}>
+      <h2>{isLogin ? "Login" : "Create Account"}</h2>
 
-        <h2>{isLogin ? "Login" : "Create Account"}</h2>
+      {error && <p style={{ color: "red" }}>{error}</p>}
 
-        {message && <p className={messageType}>{message}</p>}
-
-        <form onSubmit={handleSubmit}>
-
-          {!isLogin && (
-            <input
-              placeholder="Name"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-          )}
-
+      <form onSubmit={handleSubmit}>
+        {!isLogin && (
           <input
-            placeholder="Email"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            name="name"
+            placeholder="Name"
+            value={form.name}
+            onChange={handleChange}
           />
+        )}
 
-          {/* PASSWORD */}
-          <div className="password-box">
-            <input
-              placeholder="Password"
-              type={showPassword ? "text" : "password"}
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-            />
+        <input
+          name="email"
+          placeholder="Email"
+          value={form.email}
+          onChange={handleChange}
+        />
 
-            <button
-              type="button"
-              className={`eye-btn ${showPassword ? "eye-visible" : ""}`}
-              onClick={() => setShowPassword(!showPassword)}
-            >
-              {showPassword ? <EyeOff /> : <Eye />}
-            </button>
-          </div>
+        <input
+          type="password"
+          name="password"
+          placeholder="Password"
+          value={form.password}
+          onChange={handleChange}
+        />
 
-          {/* CONFIRM PASSWORD */}
-          {!isLogin && (
-            <div className="password-box">
-              <input
-                placeholder="Confirm Password"
-                type={showConfirmPassword ? "text" : "password"}
-                value={form.confirmPassword}
-                onChange={(e) =>
-                  setForm({ ...form, confirmPassword: e.target.value })
-                }
-              />
+        <button type="submit">
+          {isLogin ? "Login" : "Register"}
+        </button>
+      </form>
 
-              <button
-                type="button"
-                className={`eye-btn ${showConfirmPassword ? "eye-visible" : ""}`}
-                onClick={() =>
-                  setShowConfirmPassword(!showConfirmPassword)
-                }
-              >
-                {showConfirmPassword ? <EyeOff /> : <Eye />}
-              </button>
-            </div>
-          )}
-
-          <button>{isLogin ? "Login" : "Register"}</button>
-        </form>
-
-        <p className="switch-text">
-          {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
-          <button
-            type="button"
-            className="link-btn"
-            onClick={() => {
-              setIsLogin(!isLogin);
-              setMessage("");
-              setShowPassword(false);
-              setShowConfirmPassword(false);
-            }}
-          >
-            {isLogin ? "Register here" : "Login here"}
-          </button>
-        </p>
-
-      </div>
+      <p style={{ marginTop: "10px" }}>
+        {isLogin ? "Don't have an account?" : "Already have an account?"}
+        {" "}
+        <span
+          onClick={() => setIsLogin(!isLogin)}
+          style={{ color: "blue", cursor: "pointer" }}
+        >
+          {isLogin ? "Register here" : "Login here"}
+        </span>
+      </p>
     </div>
   );
 }

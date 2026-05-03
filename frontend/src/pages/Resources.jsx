@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import API from "../services/api";
 import { io } from "socket.io-client";
 
-const socket = io("http://localhost:4080");
+const socket = io("https://study-group-finder-backend-vhao.onrender.com");
 
 function Resources() {
   const [resources, setResources] = useState([]);
