@@ -21,9 +21,14 @@ const createResource = async (req, res) => {
       createdBy: req.user.id
     });
 
-    req.io.emit("resource-created", resource);
+    const populatedResource = await Resource.findById(resource._id).populate(
+      "createdBy",
+      "name email"
+    );
 
-    res.status(201).json(resource);
+    req.io.emit("resource-created", populatedResource);
+
+    res.status(201).json(populatedResource);
   } catch (err) {
     res.status(500).json({ message: "Failed to create resource" });
   }
@@ -88,7 +93,12 @@ const updateResource = async (req, res) => {
     resource.link = link;
     resource.subject = subject;
 
-    const updatedResource = await resource.save();
+    await resource.save();
+
+    const updatedResource = await Resource.findById(resource._id).populate(
+      "createdBy",
+      "name email"
+    );
 
     req.io.emit("resource-updated", updatedResource);
 

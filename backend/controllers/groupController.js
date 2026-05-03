@@ -13,13 +13,19 @@ const createGroup = async (req, res) => {
       subject,
       description,
       meetingTime,
-      createdBy: req.user.id
+      createdBy: req.user.id,
+      members: [req.user.id]
     });
 
-    req.io.emit("group-created", group);
+    const populatedGroup = await StudyGroup.findById(group._id)
+      .populate("createdBy", "name email")
+      .populate("members", "name email");
 
-    res.status(201).json(group);
+    req.io.emit("group-created", populatedGroup);
+
+    res.status(201).json(populatedGroup);
   } catch (err) {
+    console.log(err);
     res.status(500).json({ message: "Failed to create group" });
   }
 };
@@ -28,20 +34,21 @@ const getGroups = async (req, res) => {
   try {
     const groups = await StudyGroup.find()
       .populate("createdBy", "name email")
+      .populate("members", "name email")
       .sort({ createdAt: -1 });
 
     res.json(groups);
   } catch (err) {
+    console.log(err);
     res.status(500).json({ message: "Failed to load groups" });
   }
 };
 
 const getGroupById = async (req, res) => {
   try {
-    const group = await StudyGroup.findById(req.params.id).populate(
-      "createdBy",
-      "name email"
-    );
+    const group = await StudyGroup.findById(req.params.id)
+      .populate("createdBy", "name email")
+      .populate("members", "name email");
 
     if (!group) {
       return res.status(404).json({ message: "Group not found" });
@@ -49,6 +56,7 @@ const getGroupById = async (req, res) => {
 
     res.json(group);
   } catch (err) {
+    console.log(err);
     res.status(500).json({ message: "Failed to load group" });
   }
 };
@@ -78,12 +86,17 @@ const updateGroup = async (req, res) => {
     group.description = description;
     group.meetingTime = meetingTime;
 
-    const updatedGroup = await group.save();
+    await group.save();
+
+    const updatedGroup = await StudyGroup.findById(group._id)
+      .populate("createdBy", "name email")
+      .populate("members", "name email");
 
     req.io.emit("group-updated", updatedGroup);
 
     res.json(updatedGroup);
   } catch (err) {
+    console.log(err);
     res.status(500).json({ message: "Failed to update group" });
   }
 };
@@ -108,7 +121,73 @@ const deleteGroup = async (req, res) => {
 
     res.json({ message: "Group deleted" });
   } catch (err) {
+    console.log(err);
     res.status(500).json({ message: "Failed to delete group" });
+  }
+};
+
+const joinGroup = async (req, res) => {
+  try {
+    const group = await StudyGroup.findById(req.params.id);
+
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    if (!group.members) {
+      group.members = [];
+    }
+
+    const alreadyJoined = group.members.some(
+      (memberId) => memberId.toString() === req.user.id
+    );
+
+    if (!alreadyJoined) {
+      group.members.push(req.user.id);
+      await group.save();
+    }
+
+    const updatedGroup = await StudyGroup.findById(group._id)
+      .populate("createdBy", "name email")
+      .populate("members", "name email");
+
+    req.io.emit("group-joined", updatedGroup);
+
+    res.json(updatedGroup);
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Failed to join group" });
+  }
+};
+
+const leaveGroup = async (req, res) => {
+  try {
+    const group = await StudyGroup.findById(req.params.id);
+
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    if (!group.members) {
+      group.members = [];
+    }
+
+    group.members = group.members.filter(
+      (memberId) => memberId.toString() !== req.user.id
+    );
+
+    await group.save();
+
+    const updatedGroup = await StudyGroup.findById(group._id)
+      .populate("createdBy", "name email")
+      .populate("members", "name email");
+
+    req.io.emit("group-left", updatedGroup);
+
+    res.json(updatedGroup);
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Failed to leave group" });
   }
 };
 
@@ -117,5 +196,7 @@ module.exports = {
   getGroups,
   getGroupById,
   updateGroup,
-  deleteGroup
+  deleteGroup,
+  joinGroup,
+  leaveGroup
 };

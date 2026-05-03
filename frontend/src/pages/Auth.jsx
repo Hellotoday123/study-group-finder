@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import API from "../services/api";
+import { useNavigate } from "react-router-dom";
 
 function Auth() {
+  const navigate = useNavigate();
+
   const [isLogin, setIsLogin] = useState(true);
-  const [error, setError] = useState("");
 
   const [form, setForm] = useState({
     name: "",
@@ -12,15 +13,7 @@ function Auth() {
     password: ""
   });
 
-  const navigate = useNavigate();
-
-  // 🔥 Auto redirect if already logged in
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      navigate("/home");
-    }
-  }, []);
+  const [error, setError] = useState("");
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -31,36 +24,31 @@ function Auth() {
     setError("");
 
     try {
+      let res;
+
       if (isLogin) {
-        // LOGIN
-        const res = await API.post("/auth/login", {
+        res = await API.post("/auth/login", {
           email: form.email,
           password: form.password
         });
-
-        localStorage.setItem("token", res.data.token);
-
-        // ✅ Redirect after login
-        navigate("/home");
-
       } else {
-        // REGISTER
-        await API.post("/auth/signup", form);
-
-        // Switch to login after register
-        setIsLogin(true);
+        res = await API.post("/auth/register", form);
       }
 
+      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("user", JSON.stringify(res.data.user));
+
+      navigate("/home");
     } catch (err) {
-      setError("Something went wrong");
+      setError(err.response?.data?.message || "Something went wrong");
     }
   };
 
   return (
-    <div className="card" style={{ maxWidth: "400px", margin: "100px auto" }}>
-      <h2>{isLogin ? "Login" : "Create Account"}</h2>
+    <div className="card">
+      <h2>{isLogin ? "Login" : "Register"}</h2>
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      {error && <p className="error">{error}</p>}
 
       <form onSubmit={handleSubmit}>
         {!isLogin && (
@@ -80,27 +68,21 @@ function Auth() {
         />
 
         <input
-          type="password"
           name="password"
+          type="password"
           placeholder="Password"
           value={form.password}
           onChange={handleChange}
         />
 
-        <button type="submit">
-          {isLogin ? "Login" : "Register"}
-        </button>
+        <button>{isLogin ? "Login" : "Register"}</button>
       </form>
 
-      <p style={{ marginTop: "10px" }}>
-        {isLogin ? "Don't have an account?" : "Already have an account?"}
-        {" "}
-        <span
-          onClick={() => setIsLogin(!isLogin)}
-          style={{ color: "blue", cursor: "pointer" }}
-        >
-          {isLogin ? "Register here" : "Login here"}
-        </span>
+      <p>
+        {isLogin ? "No account?" : "Already have an account?"}{" "}
+        <button onClick={() => setIsLogin(!isLogin)}>
+          {isLogin ? "Register" : "Login"}
+        </button>
       </p>
     </div>
   );

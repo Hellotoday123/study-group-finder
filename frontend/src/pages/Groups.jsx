@@ -5,6 +5,8 @@ import { io } from "socket.io-client";
 const socket = io("https://study-group-finder-backend-vhao.onrender.com");
 
 function Groups() {
+  const user = JSON.parse(localStorage.getItem("user"));
+
   const [groups, setGroups] = useState([]);
 
   const [form, setForm] = useState({
@@ -19,6 +21,14 @@ function Groups() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const updateGroupInState = (updatedGroup) => {
+    setGroups((old) =>
+      old.map((group) =>
+        group._id === updatedGroup._id ? updatedGroup : group
+      )
+    );
+  };
+
   const loadGroups = async () => {
     try {
       const res = await API.get("/groups");
@@ -32,23 +42,31 @@ function Groups() {
     loadGroups();
 
     socket.on("group-created", (newGroup) => {
-      setGroups((old) => [...old, newGroup]);
-    });
-
-    socket.on("group-deleted", (id) => {
-      setGroups((old) => old.filter((g) => g._id !== id));
+      setGroups((old) => [newGroup, ...old]);
     });
 
     socket.on("group-updated", (updatedGroup) => {
-      setGroups((old) =>
-        old.map((g) => (g._id === updatedGroup._id ? updatedGroup : g))
-      );
+      updateGroupInState(updatedGroup);
+    });
+
+    socket.on("group-joined", (updatedGroup) => {
+      updateGroupInState(updatedGroup);
+    });
+
+    socket.on("group-left", (updatedGroup) => {
+      updateGroupInState(updatedGroup);
+    });
+
+    socket.on("group-deleted", (id) => {
+      setGroups((old) => old.filter((group) => group._id !== id));
     });
 
     return () => {
       socket.off("group-created");
-      socket.off("group-deleted");
       socket.off("group-updated");
+      socket.off("group-joined");
+      socket.off("group-left");
+      socket.off("group-deleted");
     };
   }, []);
 
@@ -123,8 +141,42 @@ function Groups() {
       setSuccess("Study group deleted successfully.");
       loadGroups();
     } catch (err) {
-      setError("Failed to delete group.");
+      setError(err.response?.data?.message || "Failed to delete group.");
     }
+  };
+
+  const joinGroup = async (id) => {
+    setError("");
+    setSuccess("");
+
+    try {
+      await API.post(`/groups/${id}/join`);
+      setSuccess("You have joined the group.");
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to join group.");
+    }
+  };
+
+  const leaveGroup = async (id) => {
+    setError("");
+    setSuccess("");
+
+    try {
+      await API.post(`/groups/${id}/leave`);
+      setSuccess("You have left the group.");
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to leave group.");
+    }
+  };
+
+  const isOwner = (group) => {
+    return group.createdBy?._id === user?._id || group.createdBy === user?._id;
+  };
+
+  const isMember = (group) => {
+    return group.members?.some(
+      (member) => member._id === user?._id || member === user?._id
+    );
   };
 
   return (
@@ -193,14 +245,55 @@ function Groups() {
 
             <p>{new Date(group.meetingTime).toLocaleString()}</p>
 
-            <button onClick={() => editGroup(group)}>Edit</button>
+            {group.createdBy && (
+              <p>
+                Created by:{" "}
+                {group.createdBy.name || group.createdBy.email || "User"}
+              </p>
+            )}
 
-            <button
-              className="delete-btn"
-              onClick={() => deleteGroup(group._id)}
-            >
-              Delete
-            </button>
+            <p>Members: {group.members ? group.members.length : 0}</p>
+
+            {group.members && group.members.length > 0 && (
+              <ul>
+                {group.members.map((member) => (
+                  <li key={member._id || member}>
+                    {member.name || member.email || "User"}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {!isOwner(group) && !isMember(group) && (
+              <button onClick={() => joinGroup(group._id)}>
+                Join Group
+              </button>
+            )}
+
+            {!isOwner(group) && isMember(group) && (
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <button disabled style={{ background: "gray", cursor: "default" }}>
+                  Joined
+                </button>
+
+                <button onClick={() => leaveGroup(group._id)}>
+                  Leave Group
+                </button>
+              </div>
+            )}
+
+            {isOwner(group) && (
+              <>
+                <button onClick={() => editGroup(group)}>Edit</button>
+
+                <button
+                  className="delete-btn"
+                  onClick={() => deleteGroup(group._id)}
+                >
+                  Delete
+                </button>
+              </>
+            )}
           </div>
         ))}
       </div>

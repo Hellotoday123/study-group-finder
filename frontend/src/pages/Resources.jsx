@@ -5,6 +5,8 @@ import { io } from "socket.io-client";
 const socket = io("https://study-group-finder-backend-vhao.onrender.com");
 
 function Resources() {
+  const user = JSON.parse(localStorage.getItem("user"));
+
   const [resources, setResources] = useState([]);
 
   const [form, setForm] = useState({
@@ -31,7 +33,7 @@ function Resources() {
     loadResources();
 
     socket.on("resource-created", (newResource) => {
-      setResources((old) => [...old, newResource]);
+      setResources((old) => [newResource, ...old]);
     });
 
     socket.on("resource-updated", (updatedResource) => {
@@ -127,8 +129,15 @@ function Resources() {
       setSuccess("Resource deleted successfully.");
       loadResources();
     } catch (err) {
-      setError("Failed to delete resource.");
+      setError(err.response?.data?.message || "Failed to delete resource.");
     }
+  };
+
+  const isOwner = (resource) => {
+    return (
+      resource.createdBy?._id === user?._id ||
+      resource.createdBy === user?._id
+    );
   };
 
   return (
@@ -190,19 +199,25 @@ function Resources() {
               Open Resource
             </a>
 
-            <br />
-            <br />
+            {resource.createdBy && (
+              <p>
+                Created by:{" "}
+                {resource.createdBy.name || resource.createdBy.email || "User"}
+              </p>
+            )}
 
-            <button onClick={() => editResource(resource)}>
-              Edit
-            </button>
+            {isOwner(resource) && (
+              <>
+                <button onClick={() => editResource(resource)}>Edit</button>
 
-            <button
-              className="delete-btn"
-              onClick={() => deleteResource(resource._id)}
-            >
-              Delete
-            </button>
+                <button
+                  className="delete-btn"
+                  onClick={() => deleteResource(resource._id)}
+                >
+                  Delete
+                </button>
+              </>
+            )}
           </div>
         ))}
       </div>
