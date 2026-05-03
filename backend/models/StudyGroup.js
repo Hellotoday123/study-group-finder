@@ -23,18 +23,22 @@ const studyGroupSchema = new mongoose.Schema(
       ref: "User",
       required: true
     },
+
+    // 🔥 NEW
     members: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User"
       }
     ],
+
     collaborators: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User"
       }
     ],
+
     collabRequests: [
       {
         type: mongoose.Schema.Types.ObjectId,
