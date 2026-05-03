@@ -13,65 +13,167 @@ function Resources() {
     subject: ""
   });
 
+  const [editingId, setEditingId] = useState(null);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
+
   const loadResources = async () => {
-    const res = await API.get("/resources");
-    setResources(res.data);
+    try {
+      const res = await API.get("/resources");
+      setResources(res.data);
+    } catch (err) {
+      setError("Failed to load resources.");
+    }
   };
 
   useEffect(() => {
     loadResources();
 
     socket.on("resource-created", (newResource) => {
-      setResources((oldResources) => [...oldResources, newResource]);
+      setResources((old) => [...old, newResource]);
+    });
+
+    socket.on("resource-updated", (updatedResource) => {
+      setResources((old) =>
+        old.map((resource) =>
+          resource._id === updatedResource._id ? updatedResource : resource
+        )
+      );
+    });
+
+    socket.on("resource-deleted", (id) => {
+      setResources((old) =>
+        old.filter((resource) => resource._id !== id)
+      );
     });
 
     return () => {
       socket.off("resource-created");
+      socket.off("resource-updated");
+      socket.off("resource-deleted");
     };
   }, []);
 
-  const createResource = async (e) => {
-    e.preventDefault();
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
 
-    await API.post("/resources", form);
-
+  const resetForm = () => {
     setForm({
       title: "",
       link: "",
       subject: ""
     });
+
+    setEditingId(null);
+  };
+
+  const createOrUpdateResource = async (e) => {
+    e.preventDefault();
+
+    setError("");
+    setSuccess("");
+
+    if (!form.title || !form.link || !form.subject) {
+      setError("Please fill in all fields.");
+      return;
+    }
+
+    if (!form.link.startsWith("http://") && !form.link.startsWith("https://")) {
+      setError("Please enter a valid link starting with http:// or https://");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      if (editingId) {
+        await API.put(`/resources/${editingId}`, form);
+        setSuccess("Resource updated successfully.");
+      } else {
+        await API.post("/resources", form);
+        setSuccess("Resource added successfully.");
+      }
+
+      resetForm();
+      loadResources();
+    } catch (err) {
+      setError(err.response?.data?.message || "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const editResource = (resource) => {
+    setEditingId(resource._id);
+
+    setForm({
+      title: resource.title,
+      link: resource.link,
+      subject: resource.subject
+    });
+
+    setError("");
+    setSuccess("");
   };
 
   const deleteResource = async (id) => {
-    await API.delete(`/resources/${id}`);
-    loadResources();
+    setError("");
+    setSuccess("");
+
+    try {
+      await API.delete(`/resources/${id}`);
+      setSuccess("Resource deleted successfully.");
+      loadResources();
+    } catch (err) {
+      setError("Failed to delete resource.");
+    }
   };
 
   return (
     <div>
       <div className="card">
-        <h2>Add Resource</h2>
+        <h2>{editingId ? "Edit Resource" : "Add Resource"}</h2>
 
-        <form onSubmit={createResource}>
+        {error && <p className="error">{error}</p>}
+        {success && <p className="success">{success}</p>}
+
+        <form onSubmit={createOrUpdateResource}>
           <input
+            name="title"
             placeholder="Title"
             value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            onChange={handleChange}
           />
 
           <input
+            name="link"
             placeholder="Link"
             value={form.link}
-            onChange={(e) => setForm({ ...form, link: e.target.value })}
+            onChange={handleChange}
           />
 
           <input
+            name="subject"
             placeholder="Subject"
             value={form.subject}
-            onChange={(e) => setForm({ ...form, subject: e.target.value })}
+            onChange={handleChange}
           />
 
-          <button>Add Resource</button>
+          <button disabled={loading}>
+            {loading
+              ? "Saving..."
+              : editingId
+              ? "Update Resource"
+              : "Add Resource"}
+          </button>
+
+          {editingId && (
+            <button type="button" onClick={resetForm}>
+              Cancel
+            </button>
+          )}
         </form>
       </div>
 
@@ -84,12 +186,16 @@ function Resources() {
 
             <h3>{resource.title}</h3>
 
-            <a href={resource.link} target="_blank">
+            <a href={resource.link} target="_blank" rel="noreferrer">
               Open Resource
             </a>
 
             <br />
             <br />
+
+            <button onClick={() => editResource(resource)}>
+              Edit
+            </button>
 
             <button
               className="delete-btn"

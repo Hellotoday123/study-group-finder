@@ -14,9 +14,18 @@ function Groups() {
     meetingTime: ""
   });
 
+  const [editingId, setEditingId] = useState(null);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
+
   const loadGroups = async () => {
-    const res = await API.get("/groups");
-    setGroups(res.data);
+    try {
+      const res = await API.get("/groups");
+      setGroups(res.data);
+    } catch (err) {
+      setError("Failed to load groups.");
+    }
   };
 
   useEffect(() => {
@@ -30,9 +39,16 @@ function Groups() {
       setGroups((old) => old.filter((g) => g._id !== id));
     });
 
+    socket.on("group-updated", (updatedGroup) => {
+      setGroups((old) =>
+        old.map((g) => (g._id === updatedGroup._id ? updatedGroup : g))
+      );
+    });
+
     return () => {
       socket.off("group-created");
       socket.off("group-deleted");
+      socket.off("group-updated");
     };
   }, []);
 
@@ -40,28 +56,86 @@ function Groups() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const createGroup = async (e) => {
-    e.preventDefault();
-    await API.post("/groups", form);
-
+  const resetForm = () => {
     setForm({
       title: "",
       subject: "",
       description: "",
       meetingTime: ""
     });
+
+    setEditingId(null);
+  };
+
+  const createOrUpdateGroup = async (e) => {
+    e.preventDefault();
+
+    setError("");
+    setSuccess("");
+
+    if (!form.title || !form.subject || !form.description || !form.meetingTime) {
+      setError("Please fill in all fields.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      if (editingId) {
+        await API.put(`/groups/${editingId}`, form);
+        setSuccess("Study group updated successfully.");
+      } else {
+        await API.post("/groups", form);
+        setSuccess("Study group created successfully.");
+      }
+
+      resetForm();
+      loadGroups();
+    } catch (err) {
+      setError(err.response?.data?.message || "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const editGroup = (group) => {
+    setEditingId(group._id);
+
+    setForm({
+      title: group.title,
+      subject: group.subject,
+      description: group.description,
+      meetingTime: group.meetingTime
+        ? new Date(group.meetingTime).toISOString().slice(0, 16)
+        : ""
+    });
+
+    setError("");
+    setSuccess("");
   };
 
   const deleteGroup = async (id) => {
-    await API.delete(`/groups/${id}`);
+    setError("");
+    setSuccess("");
+
+    try {
+      await API.delete(`/groups/${id}`);
+      setSuccess("Study group deleted successfully.");
+      loadGroups();
+    } catch (err) {
+      setError("Failed to delete group.");
+    }
   };
 
   return (
     <div>
       <div className="card">
-        <h2>Create Study Group</h2>
+        <h2>{editingId ? "Edit Study Group" : "Create Study Group"}</h2>
 
-        <form onSubmit={createGroup}>
+        {error && <p className="error">{error}</p>}
+        {success && <p className="success">{success}</p>}
+
+        <form onSubmit={createOrUpdateGroup}>
           <input
             name="title"
             placeholder="Title"
@@ -90,7 +164,19 @@ function Groups() {
             onChange={handleChange}
           />
 
-          <button>Add Group</button>
+          <button disabled={loading}>
+            {loading
+              ? "Saving..."
+              : editingId
+              ? "Update Group"
+              : "Add Group"}
+          </button>
+
+          {editingId && (
+            <button type="button" onClick={resetForm}>
+              Cancel
+            </button>
+          )}
         </form>
       </div>
 
@@ -107,6 +193,8 @@ function Groups() {
 
             <p>{new Date(group.meetingTime).toLocaleString()}</p>
 
+            <button onClick={() => editGroup(group)}>Edit</button>
+
             <button
               className="delete-btn"
               onClick={() => deleteGroup(group._id)}
@@ -119,16 +207,5 @@ function Groups() {
     </div>
   );
 }
-
-const [message, setMessage] = useState("");
-const [messages, setMessages] = useState([]);
-
-useEffect(() => {
-  socket.on("new-message", (msg) => {
-    setMessages((prev) => [...prev, msg]);
-  });
-
-  return () => socket.off("new-message");
-}, []);
 
 export default Groups;
