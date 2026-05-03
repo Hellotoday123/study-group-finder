@@ -28,6 +28,18 @@ const studyGroupSchema = new mongoose.Schema(
         type: mongoose.Schema.Types.ObjectId,
         ref: "User"
       }
+    ],
+    collaborators: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User"
+      }
+    ],
+    collabRequests: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User"
+      }
     ]
   },
   { timestamps: true }

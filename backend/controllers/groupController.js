@@ -1,5 +1,13 @@
 const StudyGroup = require("../models/StudyGroup");
 
+const populateGroup = async (id) => {
+  return await StudyGroup.findById(id)
+    .populate("createdBy", "name email")
+    .populate("members", "name email")
+    .populate("collaborators", "name email")
+    .populate("collabRequests", "name email");
+};
+
 const createGroup = async (req, res) => {
   try {
     const { title, subject, description, meetingTime } = req.body;
@@ -14,12 +22,12 @@ const createGroup = async (req, res) => {
       description,
       meetingTime,
       createdBy: req.user.id,
-      members: [req.user.id]
+      members: [req.user.id],
+      collaborators: [],
+      collabRequests: []
     });
 
-    const populatedGroup = await StudyGroup.findById(group._id)
-      .populate("createdBy", "name email")
-      .populate("members", "name email");
+    const populatedGroup = await populateGroup(group._id);
 
     req.io.emit("group-created", populatedGroup);
 
@@ -35,6 +43,8 @@ const getGroups = async (req, res) => {
     const groups = await StudyGroup.find()
       .populate("createdBy", "name email")
       .populate("members", "name email")
+      .populate("collaborators", "name email")
+      .populate("collabRequests", "name email")
       .sort({ createdAt: -1 });
 
     res.json(groups);
@@ -46,9 +56,7 @@ const getGroups = async (req, res) => {
 
 const getGroupById = async (req, res) => {
   try {
-    const group = await StudyGroup.findById(req.params.id)
-      .populate("createdBy", "name email")
-      .populate("members", "name email");
+    const group = await populateGroup(req.params.id);
 
     if (!group) {
       return res.status(404).json({ message: "Group not found" });
@@ -75,9 +83,15 @@ const updateGroup = async (req, res) => {
       return res.status(404).json({ message: "Group not found" });
     }
 
-    if (group.createdBy.toString() !== req.user.id) {
+    const isOwner = group.createdBy.toString() === req.user.id;
+
+    const isCollaborator = group.collaborators.some(
+      (userId) => userId.toString() === req.user.id
+    );
+
+    if (!isOwner && !isCollaborator) {
       return res.status(403).json({
-        message: "You can only edit your own groups"
+        message: "Only the owner or collaborators can edit this group"
       });
     }
 
@@ -88,9 +102,7 @@ const updateGroup = async (req, res) => {
 
     await group.save();
 
-    const updatedGroup = await StudyGroup.findById(group._id)
-      .populate("createdBy", "name email")
-      .populate("members", "name email");
+    const updatedGroup = await populateGroup(group._id);
 
     req.io.emit("group-updated", updatedGroup);
 
@@ -111,7 +123,7 @@ const deleteGroup = async (req, res) => {
 
     if (group.createdBy.toString() !== req.user.id) {
       return res.status(403).json({
-        message: "You can only delete your own groups"
+        message: "Only the owner can delete this group"
       });
     }
 
@@ -134,10 +146,6 @@ const joinGroup = async (req, res) => {
       return res.status(404).json({ message: "Group not found" });
     }
 
-    if (!group.members) {
-      group.members = [];
-    }
-
     const alreadyJoined = group.members.some(
       (memberId) => memberId.toString() === req.user.id
     );
@@ -147,9 +155,7 @@ const joinGroup = async (req, res) => {
       await group.save();
     }
 
-    const updatedGroup = await StudyGroup.findById(group._id)
-      .populate("createdBy", "name email")
-      .populate("members", "name email");
+    const updatedGroup = await populateGroup(group._id);
 
     req.io.emit("group-joined", updatedGroup);
 
@@ -168,19 +174,21 @@ const leaveGroup = async (req, res) => {
       return res.status(404).json({ message: "Group not found" });
     }
 
-    if (!group.members) {
-      group.members = [];
-    }
-
     group.members = group.members.filter(
       (memberId) => memberId.toString() !== req.user.id
     );
 
+    group.collaborators = group.collaborators.filter(
+      (userId) => userId.toString() !== req.user.id
+    );
+
+    group.collabRequests = group.collabRequests.filter(
+      (userId) => userId.toString() !== req.user.id
+    );
+
     await group.save();
 
-    const updatedGroup = await StudyGroup.findById(group._id)
-      .populate("createdBy", "name email")
-      .populate("members", "name email");
+    const updatedGroup = await populateGroup(group._id);
 
     req.io.emit("group-left", updatedGroup);
 
@@ -191,6 +199,116 @@ const leaveGroup = async (req, res) => {
   }
 };
 
+const requestCollab = async (req, res) => {
+  try {
+    const group = await StudyGroup.findById(req.params.id);
+
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    if (group.createdBy.toString() === req.user.id) {
+      return res.status(400).json({ message: "Owner cannot request collaboration" });
+    }
+
+    const alreadyCollaborator = group.collaborators.some(
+      (userId) => userId.toString() === req.user.id
+    );
+
+    if (alreadyCollaborator) {
+      return res.status(400).json({ message: "You are already a collaborator" });
+    }
+
+    const alreadyRequested = group.collabRequests.some(
+      (userId) => userId.toString() === req.user.id
+    );
+
+    if (!alreadyRequested) {
+      group.collabRequests.push(req.user.id);
+      await group.save();
+    }
+
+    const updatedGroup = await populateGroup(group._id);
+
+    req.io.emit("collab-requested", updatedGroup);
+
+    res.json(updatedGroup);
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Failed to request collaboration" });
+  }
+};
+
+const acceptCollab = async (req, res) => {
+  try {
+    const group = await StudyGroup.findById(req.params.id);
+
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    if (group.createdBy.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Only owner can accept requests" });
+    }
+
+    const requestedUserId = req.params.userId;
+
+    group.collabRequests = group.collabRequests.filter(
+      (userId) => userId.toString() !== requestedUserId
+    );
+
+    const alreadyCollaborator = group.collaborators.some(
+      (userId) => userId.toString() === requestedUserId
+    );
+
+    if (!alreadyCollaborator) {
+      group.collaborators.push(requestedUserId);
+    }
+
+    await group.save();
+
+    const updatedGroup = await populateGroup(group._id);
+
+    req.io.emit("collab-accepted", updatedGroup);
+
+    res.json(updatedGroup);
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Failed to accept collaboration request" });
+  }
+};
+
+const declineCollab = async (req, res) => {
+  try {
+    const group = await StudyGroup.findById(req.params.id);
+
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    if (group.createdBy.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Only owner can decline requests" });
+    }
+
+    const requestedUserId = req.params.userId;
+
+    group.collabRequests = group.collabRequests.filter(
+      (userId) => userId.toString() !== requestedUserId
+    );
+
+    await group.save();
+
+    const updatedGroup = await populateGroup(group._id);
+
+    req.io.emit("collab-declined", updatedGroup);
+
+    res.json(updatedGroup);
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Failed to decline collaboration request" });
+  }
+};
+
 module.exports = {
   createGroup,
   getGroups,
@@ -198,5 +316,8 @@ module.exports = {
   updateGroup,
   deleteGroup,
   joinGroup,
-  leaveGroup
+  leaveGroup,
+  requestCollab,
+  acceptCollab,
+  declineCollab
 };

@@ -45,17 +45,12 @@ function Groups() {
       setGroups((old) => [newGroup, ...old]);
     });
 
-    socket.on("group-updated", (updatedGroup) => {
-      updateGroupInState(updatedGroup);
-    });
-
-    socket.on("group-joined", (updatedGroup) => {
-      updateGroupInState(updatedGroup);
-    });
-
-    socket.on("group-left", (updatedGroup) => {
-      updateGroupInState(updatedGroup);
-    });
+    socket.on("group-updated", updateGroupInState);
+    socket.on("group-joined", updateGroupInState);
+    socket.on("group-left", updateGroupInState);
+    socket.on("collab-requested", updateGroupInState);
+    socket.on("collab-accepted", updateGroupInState);
+    socket.on("collab-declined", updateGroupInState);
 
     socket.on("group-deleted", (id) => {
       setGroups((old) => old.filter((group) => group._id !== id));
@@ -66,6 +61,9 @@ function Groups() {
       socket.off("group-updated");
       socket.off("group-joined");
       socket.off("group-left");
+      socket.off("collab-requested");
+      socket.off("collab-accepted");
+      socket.off("collab-declined");
       socket.off("group-deleted");
     };
   }, []);
@@ -169,6 +167,42 @@ function Groups() {
     }
   };
 
+  const requestCollab = async (id) => {
+    setError("");
+    setSuccess("");
+
+    try {
+      await API.post(`/groups/${id}/request-collab`);
+      setSuccess("Collaboration request sent.");
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to request collaboration.");
+    }
+  };
+
+  const acceptCollab = async (groupId, userId) => {
+    setError("");
+    setSuccess("");
+
+    try {
+      await API.post(`/groups/${groupId}/accept-collab/${userId}`);
+      setSuccess("Collaboration request accepted.");
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to accept request.");
+    }
+  };
+
+  const declineCollab = async (groupId, userId) => {
+    setError("");
+    setSuccess("");
+
+    try {
+      await API.post(`/groups/${groupId}/decline-collab/${userId}`);
+      setSuccess("Collaboration request declined.");
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to decline request.");
+    }
+  };
+
   const isOwner = (group) => {
     return group.createdBy?._id === user?._id || group.createdBy === user?._id;
   };
@@ -177,6 +211,23 @@ function Groups() {
     return group.members?.some(
       (member) => member._id === user?._id || member === user?._id
     );
+  };
+
+  const isCollaborator = (group) => {
+    return group.collaborators?.some(
+      (collaborator) =>
+        collaborator._id === user?._id || collaborator === user?._id
+    );
+  };
+
+  const hasRequested = (group) => {
+    return group.collabRequests?.some(
+      (request) => request._id === user?._id || request === user?._id
+    );
+  };
+
+  const canEdit = (group) => {
+    return isOwner(group) || isCollaborator(group);
   };
 
   return (
@@ -264,6 +315,19 @@ function Groups() {
               </ul>
             )}
 
+            {group.collaborators && group.collaborators.length > 0 && (
+              <>
+                <p>Collaborators:</p>
+                <ul>
+                  {group.collaborators.map((collaborator) => (
+                    <li key={collaborator._id || collaborator}>
+                      {collaborator.name || collaborator.email || "User"}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+
             {!isOwner(group) && !isMember(group) && (
               <button onClick={() => joinGroup(group._id)}>
                 Join Group
@@ -282,17 +346,78 @@ function Groups() {
               </div>
             )}
 
-            {isOwner(group) && (
-              <>
-                <button onClick={() => editGroup(group)}>Edit</button>
+            {!isOwner(group) && !isCollaborator(group) && !hasRequested(group) && (
+              <button onClick={() => requestCollab(group._id)}>
+                Request Collaborate
+              </button>
+            )}
 
-                <button
-                  className="delete-btn"
-                  onClick={() => deleteGroup(group._id)}
-                >
-                  Delete
-                </button>
-              </>
+            {!isOwner(group) && hasRequested(group) && (
+              <button disabled style={{ background: "orange", cursor: "default" }}>
+                Request Sent
+              </button>
+            )}
+
+            {!isOwner(group) && isCollaborator(group) && (
+              <button disabled style={{ background: "green", cursor: "default" }}>
+                Collaborator
+              </button>
+            )}
+
+            {isOwner(group) &&
+              group.collabRequests &&
+              group.collabRequests.length > 0 && (
+                <div>
+                  <h4>Collaboration Requests</h4>
+
+                  {group.collabRequests.map((requestUser) => (
+                    <div
+                      key={requestUser._id || requestUser}
+                      style={{
+                        display: "flex",
+                        gap: "10px",
+                        alignItems: "center",
+                        marginBottom: "10px"
+                      }}
+                    >
+                      <span>
+                        {requestUser.name || requestUser.email || "User"}
+                      </span>
+
+                      <button
+                        onClick={() =>
+                          acceptCollab(group._id, requestUser._id || requestUser)
+                        }
+                      >
+                        Accept
+                      </button>
+
+                      <button
+                        className="delete-btn"
+                        onClick={() =>
+                          declineCollab(group._id, requestUser._id || requestUser)
+                        }
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+            {canEdit(group) && (
+              <button onClick={() => editGroup(group)}>
+                Edit
+              </button>
+            )}
+
+            {isOwner(group) && (
+              <button
+                className="delete-btn"
+                onClick={() => deleteGroup(group._id)}
+              >
+                Delete
+              </button>
             )}
           </div>
         ))}

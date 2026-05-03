@@ -8,7 +8,10 @@ const {
   updateGroup,
   deleteGroup,
   joinGroup,
-  leaveGroup
+  leaveGroup,
+  requestCollab,
+  acceptCollab,
+  declineCollab
 } = require("../controllers/groupController");
 
 const router = express.Router();
@@ -23,5 +26,9 @@ router.delete("/:id", protect, deleteGroup);
 
 router.post("/:id/join", protect, joinGroup);
 router.post("/:id/leave", protect, leaveGroup);
+
+router.post("/:id/request-collab", protect, requestCollab);
+router.post("/:id/accept-collab/:userId", protect, acceptCollab);
+router.post("/:id/decline-collab/:userId", protect, declineCollab);
 
 module.exports = router;
