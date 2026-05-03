@@ -22,6 +22,15 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
+app.get("/", (req, res) => {
+  res.send("API is running");
+});
+
+app.use("/api", (req, res, next) => {
+  console.log(req.method, req.url);
+  next();
+});
+
 app.use((req, res, next) => {
   req.io = io;
   next();
@@ -51,8 +60,11 @@ io.on("connection", (socket) => {
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => {
     console.log("MongoDB connected");
-    server.listen(process.env.PORT, () => {
-      console.log("Server running on port " + process.env.PORT);
+
+    const PORT = process.env.PORT || 4080;
+
+    server.listen(PORT, () => {
+      console.log("Server running on port " + PORT);
     });
   })
   .catch((err) => {

@@ -2,13 +2,17 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
-const protect = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
+// SIGNUP
 router.post("/signup", async (req, res) => {
   try {
     const { name, email, password } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: "All fields required" });
+    }
 
     const existingUser = await User.findOne({ email });
 
@@ -24,12 +28,14 @@ router.post("/signup", async (req, res) => {
       password: hashedPassword
     });
 
-    res.status(201).json({ message: "User created", user });
+    res.status(201).json({ message: "User created successfully", user });
   } catch (err) {
+    console.log(err);
     res.status(500).json({ message: "Signup error" });
   }
 });
 
+// LOGIN
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -47,28 +53,16 @@ router.post("/login", async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user._id, email: user.email },
+      { id: user._id },
       process.env.JWT_SECRET,
       { expiresIn: "1d" }
     );
 
-    res.json({
-      message: "Login successful",
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email
-      }
-    });
+    res.json({ token, user });
   } catch (err) {
+    console.log(err);
     res.status(500).json({ message: "Login error" });
   }
-});
-
-router.get("/me", protect, async (req, res) => {
-  const user = await User.findById(req.user.id).select("-password");
-  res.json(user);
 });
 
 module.exports = router;

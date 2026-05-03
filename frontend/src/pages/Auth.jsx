@@ -3,9 +3,12 @@ import { useNavigate } from "react-router-dom";
 import API from "../services/api";
 
 function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
-  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
+
+  const [isLogin, setIsLogin] = useState(true);
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -17,44 +20,27 @@ function Auth() {
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
 
-  const EyeIcon = () => (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="22"
-      height="22"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="#6b7280"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+  // 👁️ ICONS
+  const Eye = () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2">
       <path d="M1 12C3 7 7 5 12 5s9 2 11 7c-2 5-6 7-11 7s-9-2-11-7z" />
       <circle cx="12" cy="12" r="3" />
     </svg>
   );
 
-  const EyeOffIcon = () => (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="22"
-      height="22"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="#6b7280"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+  const EyeOff = () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2">
       <path d="M1 1l22 22" />
-      <path d="M10.58 10.58A2 2 0 0 0 12 14a2 2 0 0 0 1.42-.58" />
-      <path d="M9.88 4.24A10.86 10.86 0 0 1 12 4c5 0 9 3 11 8a13.22 13.22 0 0 1-3.12 4.19" />
-      <path d="M6.61 6.61A13.53 13.53 0 0 0 1 12c2 5 6 8 11 8a10.86 10.86 0 0 0 4.39-.89" />
+      <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19C7 19 2.73 15.11 1 12c.73-1.34 1.67-2.6 2.8-3.72" />
+      <path d="M9.9 4.24A10.94 10.94 0 0 1 12 5c5 0 9.27 3.89 11 7" />
     </svg>
   );
 
+  // 🚀 SUBMIT
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    setMessage("");
 
     try {
       if (!isLogin && form.password !== form.confirmPassword) {
@@ -78,7 +64,7 @@ function Auth() {
           password: form.password
         });
 
-        setMessage("Account created. You can login now.");
+        setMessage("Account created. Login now.");
         setMessageType("success");
         setIsLogin(true);
       }
@@ -89,10 +75,11 @@ function Auth() {
         password: "",
         confirmPassword: ""
       });
-    } catch (err) {
-      console.log(err.response?.data);
 
-      setMessage(err.response?.data?.message || "Something went wrong");
+    } catch (err) {
+      console.log("ERROR:", err.response?.data || err.message);
+
+      setMessage(err.response?.data?.message || "Backend not responding");
       setMessageType("error");
     }
   };
@@ -100,11 +87,13 @@ function Auth() {
   return (
     <div className="auth-wrapper">
       <div className="card auth-card">
+
         <h2>{isLogin ? "Login" : "Create Account"}</h2>
 
         {message && <p className={messageType}>{message}</p>}
 
         <form onSubmit={handleSubmit}>
+
           {!isLogin && (
             <input
               placeholder="Name"
@@ -119,6 +108,7 @@ function Auth() {
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
 
+          {/* PASSWORD */}
           <div className="password-box">
             <input
               placeholder="Password"
@@ -132,15 +122,16 @@ function Auth() {
               className={`eye-btn ${showPassword ? "eye-visible" : ""}`}
               onClick={() => setShowPassword(!showPassword)}
             >
-              {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+              {showPassword ? <EyeOff /> : <Eye />}
             </button>
           </div>
 
+          {/* CONFIRM PASSWORD */}
           {!isLogin && (
             <div className="password-box">
               <input
                 placeholder="Confirm Password"
-                type={showPassword ? "text" : "password"}
+                type={showConfirmPassword ? "text" : "password"}
                 value={form.confirmPassword}
                 onChange={(e) =>
                   setForm({ ...form, confirmPassword: e.target.value })
@@ -149,10 +140,12 @@ function Auth() {
 
               <button
                 type="button"
-                className={`eye-btn ${showPassword ? "eye-visible" : ""}`}
-                onClick={() => setShowPassword(!showPassword)}
+                className={`eye-btn ${showConfirmPassword ? "eye-visible" : ""}`}
+                onClick={() =>
+                  setShowConfirmPassword(!showConfirmPassword)
+                }
               >
-                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                {showConfirmPassword ? <EyeOff /> : <Eye />}
               </button>
             </div>
           )}
@@ -168,19 +161,14 @@ function Auth() {
             onClick={() => {
               setIsLogin(!isLogin);
               setMessage("");
-              setMessageType("");
               setShowPassword(false);
-              setForm({
-                name: "",
-                email: "",
-                password: "",
-                confirmPassword: ""
-              });
+              setShowConfirmPassword(false);
             }}
           >
             {isLogin ? "Register here" : "Login here"}
           </button>
         </p>
+
       </div>
     </div>
   );
